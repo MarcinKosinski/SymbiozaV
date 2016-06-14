@@ -1,0 +1,67 @@
+#' # Dlaczego warto znać dplyr'a?
+#' 
+#' [Data Wrangling with dplyr and tidyr](https://www.rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf)
+#' 
+#' Praktycznie każda baza danych różni się listą zaimplementowanych funkcjonalności czy agregatów.
+#' 
+#' Jeżeli pracujemy z jedną bazą danych to może nam to nie doskiwerać, ale jeżeli trzeba jednocześnie korzystać z MSSQL'a, MySQLa i Postgresa?
+#' 
+#' Wielu problemów można sobie oszczędzić używając pośrednika do komunikacji z bazą danych takiego jak [dplyr](https://cran.r-project.org/web/packages/dplyr/index.html). Pozwala on do pewnego stopnia na pracę z danymi bez zastanawiania się gdzie te dane aktualnie są i jaką funkcją w aktualnej bazie danych liczy się średnią.
+#' 
+## ------------------------------------------------------------------------
+library(RSQLite)
+library(dplyr)
+
+#' 
+#' Połączenie z bazą danych
+## ------------------------------------------------------------------------
+getwd() # zwraca obecną lokalizację ścieżki roboczej
+articles_conn_dplyr <- src_sqlite(path = "../02_RSQLite/articles.db")
+
+#' 
+#' Obiekt klasy `tbl_sql` można utworzyć podając nazwę tabeli lub pisząc zapytanie typu SELECT 
+## ------------------------------------------------------------------------
+articles_and_wids_tbl <- tbl(articles_conn_dplyr, "articles_and_wids")
+articles_all <- tbl(articles_conn_dplyr, sql(
+														 "SELECT *
+														 FROM articles_and_wids arts
+														 JOIN categories_and_entries cat
+														 ON arts.id = cat.id
+														 JOIN names_and_idCCs names
+														 ON cat.category = names.id_cc "))
+
+#' 
+#' Na takim obiekcie można pracować wykorzystując funkcje z pakietu `dplyr`
+#' 
+## ------------------------------------------------------------------------
+# ile jest różnych artykułów przypisanych do danej kategorii
+articles_all %>%
+	group_by(name) %>%
+	summarise(count=n()) %>%
+	arrange(desc(count)) -> aggr1
+aggr1
+
+#' 
+## ------------------------------------------------------------------------
+# ile kategorii ma jeden artykuł
+articles_all %>%
+	group_by(wid) %>%
+	summarise(do_ilu_przypisanych_kategorii=n()) %>%
+	group_by(do_ilu_przypisanych_kategorii) %>%
+	summarise(ile_artykulow=n()) %>%
+	arrange(do_ilu_przypisanych_kategorii)-> aggr2
+aggr2
+
+#' 
+#' Bardzo pożyteczną funkcjonalnością tego pakietu jest odwołanie się do zapytania,
+#' którego normalnie trzeba byłoby użyć aby uzyskać taki sam wynik jak przy użyciu funkcji
+#' z pakietu R.
+#' 
+## ------------------------------------------------------------------------
+aggr1$query
+aggr2$query
+
+#' 
+#' *Wyjaśnienie funkcji i składni znajduje się w następnym rozdziale.*
+#' 
+#' 

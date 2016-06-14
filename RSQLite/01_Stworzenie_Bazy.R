@@ -1,0 +1,91 @@
+#' # Wczytanie danych z pliku .csv
+#' 
+#' Do wczytywania danych wykorzystamy pakiet [`data.table`](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.pdf), który udostępnia funkcję
+#' `fread` wczytującą dane z plików szybciej niż podstawowe funkcje z pakietu `base`.
+## ------------------------------------------------------------------------
+library(data.table)
+articles <- fread("../100_dane/articles_codepot.csv",
+									data.table = FALSE) # wczytany obiekt będzię klasy data.frame
+
+#' 
+#' Nazwy kolumn w ramce danych `articles` otrzymuje się poleceniem
+## ------------------------------------------------------------------------
+names(articles)
+
+#' 
+#' Dodajmy kolumnę z identyfikatorem wiersza
+## ------------------------------------------------------------------------
+articles <- cbind(articles, id = 1:nrow(articles))
+names(articles)
+
+#' 
+#' 
+#' # Tworzenie bazy danych
+#' 
+#' ## Stworzenie bazy
+#' 
+#' Aby stworzyć tabele w planowanej bazie danych, stwórzmy mniejsze ramki danych
+#' wybierając tylko niektóre kolumny
+#' 
+## ------------------------------------------------------------------------
+articles_and_wids <- articles[, c("wid", "tytul", "zajawka", "tresc", "id")]
+categories_and_entries <- articles[, c("category", "entry", "id")]
+names_and_idCCs <- articles[, c("name", "id_cc")]
+
+#' 
+#' Dla tabel zawierających jedynie klucze, możemy wybrać tylko połączenia unikalne
+## ------------------------------------------------------------------------
+dim(names_and_idCCs)
+names_and_idCCs_unique <- unique(names_and_idCCs) # zwraca unikalne wiersze
+dim(names_and_idCCs_unique)
+
+#' 
+#' Połączenie z bazą danych oraz pierwotne stworzenie pliku z bazą danych
+#' 
+## ---- echo=2:4-----------------------------------------------------------
+file.remove("articles.db")
+library(RSQLite)
+articles_conn <- dbConnect( SQLite(), dbname = "articles.db" ) 
+# SQLite() - Class SQLiteDriver with constructor SQLite.
+
+#' 
+#' ## Zapis do bazy
+#' 
+#' Wpisanie nowych tabel do bazy danych z gotowych ramek danych
+#' 
+## ------------------------------------------------------------------------
+dbWriteTable( articles_conn, "articles_and_wids", articles_and_wids,
+							overwrite = TRUE, row.names = FALSE )
+dbWriteTable( articles_conn, "categories_and_entries", categories_and_entries,
+							overwrite = TRUE, row.names = FALSE )
+dbWriteTable( articles_conn, "names_and_idCCs", names_and_idCCs_unique,
+							overwrite = TRUE, row.names = FALSE )
+
+#' 
+#' Ewentualnie: stworzenie pustych tabel
+#' 
+#' 
+## ------------------------------------------------------------------------
+dbSendQuery(articles_conn, "
+            CREATE TABLE articles_and_wids_PK
+            (id INTEGER PRIMARY KEY,
+						wid INTEGER,
+            tytul VARCHAR(50),
+            zajawka VARCHAR(5000),
+            tresc VARCHAR(5000000),
+						UNIQUE (wid,tytul,zajawka,tresc) ON CONFLICT IGNORE)")
+
+#' 
+#' Wtedy `INSERT` do pustej tabeli można wykonać np. tak
+#' 
+## ------------------------------------------------------------------------
+insert <- paste0("INSERT INTO articles_and_wids_PK (id,wid,tytul,zajawka,tresc) VALUES (",
+									articles_and_wids[1, 1], ",'",
+									articles_and_wids[1, 2], "','",
+									articles_and_wids[1, 3], "','",
+								  articles_and_wids[1, 4], "','",
+									articles_and_wids[1, 5], "')")
+substr(insert, start=1, stop = 200)
+dbSendQuery(articles_conn, insert)
+
+#' 
